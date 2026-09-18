@@ -1,25 +1,55 @@
-name: Linux (Vulkan)
+name: Package ArmorPaint for Windows (Standalone x64)
 
 on:
+  workflow_dispatch:
   push:
-    branches:
-    - main
-  pull_request:
-    branches:
-    - main
+    branches: [ main ]
 
 jobs:
-  build:
-
-    runs-on: ubuntu-latest
+  build-and-package:
+    name: Build Standalone Windows Executable
+    runs-on: windows-latest
 
     steps:
-    - uses: actions/checkout@v3
-    - name: Apt Update
-      run: sudo apt-get update
-    - name: Apt Install
-      run: sudo apt install make clang libvulkan-dev libgtk-3-dev libasound2-dev --yes --quiet
-    - name: Compile
-      run: |
-        cd paint
-        ../base/make --compile
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Compile ArmorPaint (Direct3D 12)
+        run: |
+          cd paint
+          ../base/make --compile
+
+      - name: Bundle Standalone Windows Distribution
+        shell: bash
+        run: |
+          mkdir -p dist/ArmorPaint
+          
+          # Copy compiled binary
+          if [ -f "paint/ArmorPaint.exe" ]; then
+            cp "paint/ArmorPaint.exe" dist/ArmorPaint/
+          elif [ -f "paint/build/x64/Release/ArmorPaint.exe" ]; then
+            cp "paint/build/x64/Release/ArmorPaint.exe" dist/ArmorPaint/
+          fi
+          
+          # Copy runtime assets
+          cp -r paint/data dist/ArmorPaint/
+          
+          # Copy readme and license
+          [ -f "paint/assets/readme/readme.txt" ] && cp "paint/assets/readme/readme.txt" dist/ArmorPaint/
+          [ -f "license.md" ] && cp "license.md" dist/ArmorPaint/
+          
+          # Create ZIP archive
+          cd dist
+          7z a ArmorPaint-Windows-x64-Standalone.zip ArmorPaint
+
+      - name: Upload Standalone Windows Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ArmorPaint-Windows-x64-Standalone
+          path: dist/ArmorPaint-Windows-x64-Standalone.zip
+          retention-days: 30
