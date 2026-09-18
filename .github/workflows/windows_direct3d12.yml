@@ -4,18 +4,22 @@ on:
   push:
     branches:
     - main
-  pull_request:
-    branches:
-    - main
+  workflow_dispatch:
 
 jobs:
   build:
-
     runs-on: windows-latest
-
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
+
     - name: Compile
       run: |
         cd paint
         ../base/make --compile
+
+    - name: Upload Standalone Windows Application
+      uses: actions/upload-artifact@v4
+      with:
+        name: ArmorPaint-Windows-x64-Standalone
+        path: paint/build/out
+        retention-days: 30
