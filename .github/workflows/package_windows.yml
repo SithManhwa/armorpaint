@@ -1,0 +1,85 @@
+name: Package ArmorPaint for Windows (Standalone x64)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  build-and-package:
+    name: Build Standalone Windows Executable
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout armorpaint repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js (v20)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Compile ArmorPaint Engine (Direct3D 12 + ClangCL)
+        shell: cmd
+        run: |
+          cd paint
+          call ..\base\make.bat --compile
+          dir
+          if exist ArmorPaint.exe (
+            echo "ArmorPaint.exe compiled successfully!"
+          ) else (
+            echo "Checking build directory..."
+            dir build
+          )
+
+      - name: Assemble Standalone Windows Distribution Folder
+        shell: pwsh
+        run: |
+          $DistDir = "dist\ArmorPaint-Windows-x64"
+          New-Item -ItemType Directory -Force -Path $DistDir | Out-Null
+          New-Item -ItemType Directory -Force -Path "$DistDir\data" | Out-Null
+
+          # Copy main compiled executable
+          if (Test-Path "paint\ArmorPaint.exe") {
+            Copy-Item "paint\ArmorPaint.exe" -Destination "$DistDir\"
+          } elseif (Test-Path "paint\build\x64\Release\ArmorPaint.exe") {
+            Copy-Item "paint\build\x64\Release\ArmorPaint.exe" -Destination "$DistDir\"
+          } elseif (Test-Path "paint\build\Release\ArmorPaint.exe") {
+            Copy-Item "paint\build\Release\ArmorPaint.exe" -Destination "$DistDir\"
+          } else {
+            Write-Error "ArmorPaint.exe was not found in expected output directories!"
+            exit 1
+          }
+
+          # Copy data assets (shaders, presets, meshes, locales, plugins)
+          if (Test-Path "paint\data") {
+            Copy-Item -Recurse -Force "paint\data\*" -Destination "$DistDir\data\"
+          }
+
+          # Copy readme & license documents
+          if (Test-Path "paint\assets\readme\readme.txt") {
+            Copy-Item "paint\assets\readme\readme.txt" -Destination "$DistDir\"
+          }
+          if (Test-Path "license.md") {
+            Copy-Item "license.md" -Destination "$DistDir\LICENSE.txt"
+          }
+
+          # Generate launch helper script
+          $LaunchScript = @"
+@echo off
+cd /d "%~dp0"
+start "" "ArmorPaint.exe"
+"@
+          Set-Content -Path "$DistDir\run_armorpaint.bat" -Value $LaunchScript
+
+          # Compress to standalone distribution zip
+          New-Item -ItemType Directory -Force -Path "dist\artifacts" | Out-Null
+          Compress-Archive -Path "$DistDir\*" -DestinationPath "dist\artifacts\ArmorPaint-Windows-x64-Standalone.zip" -Force
+          Write-Host "Created standalone package at dist\artifacts\ArmorPaint-Windows-x64-Standalone.zip"
+
+      - name: Upload Standalone Windows Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ArmorPaint-Windows-x64-Standalone
+          path: dist/artifacts/ArmorPaint-Windows-x64-Standalone.zip
+          retention-days: 30
